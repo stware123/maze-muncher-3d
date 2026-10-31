@@ -164,7 +164,8 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--neon)}
     <div class="panel">
       <h2>Controls</h2>
       <div class="opts"><div class="optrow"><span>Controls</span><div class="seg" role="group" aria-label="Control style"><button data-mode="arcade">Auto-run</button><button data-mode="free">Free roam</button></div></div>
-      <div class="optrow"><span>Speed</span><div class="seg seg3" role="group" aria-label="Game speed"><button data-pace="slow">Relaxed</button><button data-pace="normal">Normal</button><button data-pace="fast">Arcade</button></div></div></div>
+      <div class="optrow"><span>Speed</span><div class="seg seg3" role="group" aria-label="Game speed"><button data-pace="slow">Relaxed</button><button data-pace="normal">Normal</button><button data-pace="fast">Arcade</button></div></div>
+      <div class="optrow"><span>Walls</span><div class="seg" role="group" aria-label="Wall height"><button data-walls="low">Low</button><button data-walls="tall">Tall</button></div></div></div>
       <div class="keys" id="keys"></div>
       <h2>Who's hunting you</h2>
       <div class="roster">
@@ -185,6 +186,7 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--neon)}
       <div class="row"><label for="sens">Look speed</label><input type="range" id="sens" min="0.4" max="2.2" step="0.1"></div>
       <div class="row"><label for="snd">Sound</label><input type="checkbox" id="snd"></div>
       <div class="row"><span>Speed</span><div class="seg seg3" role="group" aria-label="Game speed"><button data-pace="slow">Relaxed</button><button data-pace="normal">Normal</button><button data-pace="fast">Arcade</button></div></div>
+      <div class="row"><span>Walls</span><div class="seg" role="group" aria-label="Wall height"><button data-walls="low">Low</button><button data-walls="tall">Tall</button></div></div>
       <div class="row"><span>Controls</span><div class="seg" role="group" aria-label="Control style"><button data-mode="arcade">Auto-run</button><button data-mode="free">Free roam</button></div></div>
     </div>
     <button class="btn" id="resumeBtn">Resume</button>
@@ -247,7 +249,7 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
-const settings = Object.assign({sens:1, sound:true, controls:'arcade', pace:'slow'}, store.get('mm3d_settings', {}));
+const settings = Object.assign({sens:1, sound:true, controls:'arcade', pace:'slow', walls:'low'}, store.get('mm3d_settings', {}));
 let high = store.get('mm3d_high', 0);
 const arcade = () => settings.controls === 'arcade';
 const isTouch = matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints || 0) > 0;
@@ -293,17 +295,25 @@ const floorTex = canvasTex(128, (g, s) => {
 floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(W + 8, H + 8);
 
 // Walls
-const WALL_H = 1.35;
+const lowWalls = () => settings.walls !== 'tall';
 const wallCells = [];
 for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (grid[r][c] === '#') wallCells.push([c, r]);
 const wallMat = new THREE.MeshLambertMaterial({map: wallTex, emissive: 0xffffff, emissiveMap: wallTex, emissiveIntensity: .55});
-const walls = new THREE.InstancedMesh(new THREE.BoxGeometry(1, WALL_H, 1), wallMat, wallCells.length);
+const wallTopMat = new THREE.MeshLambertMaterial({color: 0x1a1c5e, emissive: 0x23257a, emissiveIntensity: .7});
+const walls = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), [wallMat, wallMat, wallTopMat, wallMat, wallMat, wallMat], wallCells.length);
 const m4 = new THREE.Matrix4();
-wallCells.forEach(([c, r], i) => { m4.makeTranslation(c + .5, WALL_H/2, r + .5); walls.setMatrixAt(i, m4); });
+const s4 = new THREE.Matrix4();
+function applyWalls(){
+  const h = lowWalls() ? .42 : 1.35;
+  wallCells.forEach(([c, r], i) => { m4.makeTranslation(c + .5, h/2, r + .5); m4.multiply(s4.makeScale(1, h, 1)); walls.setMatrixAt(i, m4); });
+  walls.instanceMatrix.needsUpdate = true; walls.computeBoundingSphere();
+  scene.fog.density = lowWalls() ? .035 : .07;
+  door.position.y = Math.min(.55, h*.75);
+}
 scene.add(walls);
 // Ghost door
 const door = new THREE.Mesh(new THREE.BoxGeometry(1, .14, .12), new THREE.MeshBasicMaterial({color: 0xff7ce0}));
-door.position.set(10.5, .55, 8.5); scene.add(door);
+door.position.set(10.5, .55, 8.5); scene.add(door); applyWalls();
 // Floor
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(W + 8, H + 8), new THREE.MeshLambertMaterial({map: floorTex}));
 floor.rotation.x = -Math.PI/2; floor.position.set(W/2, 0, H/2); scene.add(floor);
@@ -629,6 +639,7 @@ function renderControls(){
   $('keys').innerHTML = rows.map(([k, v]) => `<kbd>${k}</kbd><span>${v}</span>`).join('');
   document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === settings.controls));
   document.querySelectorAll('[data-pace]').forEach(b => b.setAttribute('aria-pressed', b.dataset.pace === settings.pace));
+  document.querySelectorAll('[data-walls]').forEach(b => b.setAttribute('aria-pressed', b.dataset.walls === settings.walls));
 }
 function setControls(mode){
   if (mode === settings.controls) return;
@@ -646,6 +657,7 @@ function setControls(mode){
   if (state === 'paused') showPlayUI(true);
 }
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setControls(b.dataset.mode)));
+document.querySelectorAll('[data-walls]').forEach(b => b.addEventListener('click', () => { settings.walls = b.dataset.walls; store.set('mm3d_settings', settings); applyWalls(); renderControls(); }));
 document.querySelectorAll('[data-pace]').forEach(b => b.addEventListener('click', () => { settings.pace = b.dataset.pace; store.set('mm3d_settings', settings); renderControls(); }));
 renderControls();
 $('installTip').textContent = isTouch
@@ -977,11 +989,12 @@ function placeCamera(dt){
     player.yaw += d * Math.min(1, dt*13);
   }
   const bob = state === 'play' && (!arcade() || player.moving) ? Math.sin(player.bob)*.028 : 0;
-  camera.position.set(player.x, .58 + bob, player.z);
-  camera.rotation.set(player.pitch, player.yaw, 0);
+  const eye = lowWalls() ? 1.0 : .58, tilt = lowWalls() ? -.24 : 0;
+  camera.position.set(player.x, eye + bob, player.z);
+  camera.rotation.set(player.pitch + tilt, player.yaw, 0);
   if (state === 'dying'){
     const k = Math.min(1, stateT/1.3);
-    camera.position.y = .58 - k*.42; camera.rotation.z = k*.7; camera.rotation.x = -k*.3;
+    camera.position.y = eye - k*(eye - .16); camera.rotation.z = k*.7; camera.rotation.x = tilt - k*.3;
   }
   headLamp.position.copy(camera.position);
 }
