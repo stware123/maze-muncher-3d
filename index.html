@@ -63,6 +63,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--neon);outline-o
 
 #turnCue{position:fixed;z-index:5;left:50%;bottom:calc(22% + env(safe-area-inset-bottom,0px));transform:translateX(-50%);pointer-events:none;
   font-family:var(--f-display);font-size:30px;color:var(--neon);text-shadow:0 0 14px var(--neon);letter-spacing:.05em}
+.edge{position:fixed;z-index:4;top:50%;transform:translateY(-50%);pointer-events:none;font-family:var(--f-display);font-size:clamp(56px,12vmin,96px);line-height:1;
+  color:var(--neon);opacity:.8;text-shadow:0 0 18px var(--neon);transition:opacity .15s}
+#edgeL{left:calc(10px + env(safe-area-inset-left,0px))}#edgeR{right:calc(10px + env(safe-area-inset-right,0px))}
+.edge.queued{color:var(--gold);opacity:1;text-shadow:0 0 22px var(--gold)}
 /* Touch controls */
 #joyBase{position:fixed;z-index:4;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:2px solid var(--line);
   background:rgba(108,244,255,.07);pointer-events:none;display:none}
@@ -139,6 +143,7 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--neon)}
 <div id="mapWrap" hidden><canvas id="map"></canvas><span id="mapHint">TAP</span></div>
 <div id="msg" hidden></div>
 <div id="turnCue" hidden></div>
+<div id="edgeL" class="edge" hidden aria-hidden="true">‹</div><div id="edgeR" class="edge" hidden aria-hidden="true">›</div>
 
 <div id="joyBase"><div id="joyKnob"></div></div>
 <div id="joyHint" hidden>MOVE<br>&amp; STEER</div>
@@ -165,7 +170,9 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--neon)}
       <h2>Controls</h2>
       <div class="opts"><div class="optrow"><span>Controls</span><div class="seg" role="group" aria-label="Control style"><button data-mode="arcade">Auto-run</button><button data-mode="free">Free roam</button></div></div>
       <div class="optrow"><span>Speed</span><div class="seg seg3" role="group" aria-label="Game speed"><button data-pace="slow">Relaxed</button><button data-pace="normal">Normal</button><button data-pace="fast">Arcade</button></div></div>
-      <div class="optrow"><span>Walls</span><div class="seg" role="group" aria-label="Wall height"><button data-walls="low">Low</button><button data-walls="tall">Tall</button></div></div></div>
+      <div class="optrow"><span>Walls</span><div class="seg" role="group" aria-label="Wall height"><button data-walls="low">Low</button><button data-walls="tall">Tall</button></div></div>
+      <div class="optrow"><span>View</span><div class="seg" role="group" aria-label="Camera"><button data-view="eyes">Eyes</button><button data-view="behind">Behind</button></div></div>
+      <div class="optrow"><span>Map</span><div class="seg" role="group" aria-label="Map"><button data-map="turn">Turns</button><button data-map="north">North up</button></div></div></div>
       <div class="keys" id="keys"></div>
       <h2>Who's hunting you</h2>
       <div class="roster">
@@ -187,6 +194,8 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--neon)}
       <div class="row"><label for="snd">Sound</label><input type="checkbox" id="snd"></div>
       <div class="row"><span>Speed</span><div class="seg seg3" role="group" aria-label="Game speed"><button data-pace="slow">Relaxed</button><button data-pace="normal">Normal</button><button data-pace="fast">Arcade</button></div></div>
       <div class="row"><span>Walls</span><div class="seg" role="group" aria-label="Wall height"><button data-walls="low">Low</button><button data-walls="tall">Tall</button></div></div>
+      <div class="row"><span>View</span><div class="seg" role="group" aria-label="Camera"><button data-view="eyes">Eyes</button><button data-view="behind">Behind</button></div></div>
+      <div class="row"><span>Map</span><div class="seg" role="group" aria-label="Map"><button data-map="turn">Turns</button><button data-map="north">North up</button></div></div>
       <div class="row"><span>Controls</span><div class="seg" role="group" aria-label="Control style"><button data-mode="arcade">Auto-run</button><button data-mode="free">Free roam</button></div></div>
     </div>
     <button class="btn" id="resumeBtn">Resume</button>
@@ -249,7 +258,7 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
-const settings = Object.assign({sens:1, sound:true, controls:'arcade', pace:'slow', walls:'low'}, store.get('mm3d_settings', {}));
+const settings = Object.assign({sens:1, sound:true, controls:'arcade', pace:'slow', walls:'low', view:'eyes', map:'turn'}, store.get('mm3d_settings', {}));
 let high = store.get('mm3d_high', 0);
 const arcade = () => settings.controls === 'arcade';
 const isTouch = matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints || 0) > 0;
@@ -373,6 +382,12 @@ gem.add(glowSprite(0xff4fd8, 1.4, .7));
 gem.position.set(GEM_CELL.c + .5, .55, GEM_CELL.r + .5); gem.visible = false; scene.add(gem);
 const GEM_VALUES = [100, 300, 500, 700, 1000, 2000, 3000, 5000];
 
+/* ---------- Player avatar (Behind view) ---------- */
+const avatar = new THREE.Group();
+avatar.add(new THREE.Mesh(new THREE.SphereGeometry(.24, 24, 16), new THREE.MeshBasicMaterial({color: 0xffd27a})));
+avatar.add(glowSprite(0xffc95a, 1.3, .55));
+avatar.visible = false; scene.add(avatar);
+
 /* ---------- Ghosts ---------- */
 const GHOSTS = [
   {name:'Rook',  color:0xff3b4e, scatter:[W-2, -3], slot:null,   release:0},
@@ -471,7 +486,7 @@ function popup(text){
   document.body.appendChild(d); setTimeout(() => d.remove(), 1000);
 }
 function showPlayUI(on){
-  $('turnCue').hidden = true;
+  $('turnCue').hidden = true; $('edgeL').hidden = $('edgeR').hidden = true;
   ['hudL','hudC','mapWrap'].forEach(id => $(id).hidden = !on);
   const a = arcade();
   $('turnBtn').hidden = !(on && isTouch && !a); $('joyHint').hidden = !(on && isTouch && !a);
@@ -629,8 +644,8 @@ function begin(){
 $('playBtn').onclick = begin; $('againBtn').onclick = begin; $('menuBtn').onclick = toTitle;
 document.addEventListener('visibilitychange', () => { if (document.hidden && inGame()) pause(); });
 const HELP = {
-  arcadeTouch: [['Swipe ◀ ▶','Take the next left or right'],['Swipe ▲','Run forward'],['Swipe ▼','Turn round and run back'],['Arrow pad','Same moves, bottom right'],['Map','Tap it to make it bigger']],
-  arcadeDesk: [['↑ / W','Run forward'],['↓ / S','Turn round and run back'],['← → / A D','Take the next left or right'],['Mouse drag','Glance around'],['M','Bigger map'],['Esc / P','Pause']],
+  arcadeTouch: [['‹ ›','Glow at the screen edge when a turning is coming up'],['Swipe ◀ ▶','Take the next left or right'],['Swipe ▲','Run forward'],['Swipe ▼','Turn round and run back'],['Arrow pad','Same moves, bottom right'],['Map','Tap it to make it bigger']],
+  arcadeDesk: [['‹ ›','Glow at the screen edge when a turning is coming up'],['↑ / W','Run forward'],['↓ / S','Turn round and run back'],['← → / A D','Take the next left or right'],['Mouse drag','Glance around'],['M','Bigger map'],['Esc / P','Pause']],
   freeTouch: [['Left thumb','Drag anywhere on the left: up to run, sideways to steer'],['Right thumb','Drag to look around'],['180°','Spin round instantly'],['Map','Tap it to make it bigger']],
   freeDesk: [['W A S D','Run and sidestep'],['Mouse','Look around (click the game to lock the mouse)'],['← →','Turn without the mouse'],['Space','Spin round 180°'],['M','Bigger map'],['Esc / P','Pause']]
 };
@@ -640,6 +655,7 @@ function renderControls(){
   document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === settings.controls));
   document.querySelectorAll('[data-pace]').forEach(b => b.setAttribute('aria-pressed', b.dataset.pace === settings.pace));
   document.querySelectorAll('[data-walls]').forEach(b => b.setAttribute('aria-pressed', b.dataset.walls === settings.walls));
+  for (const key of ['view', 'map']) document.querySelectorAll(`[data-${key}]`).forEach(b => b.setAttribute('aria-pressed', b.dataset[key] === settings[key]));
 }
 function setControls(mode){
   if (mode === settings.controls) return;
@@ -657,6 +673,7 @@ function setControls(mode){
   if (state === 'paused') showPlayUI(true);
 }
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setControls(b.dataset.mode)));
+for (const key of ['view', 'map']) document.querySelectorAll(`[data-${key}]`).forEach(b => b.addEventListener('click', () => { settings[key] = b.dataset[key]; store.set('mm3d_settings', settings); renderControls(); }));
 document.querySelectorAll('[data-walls]').forEach(b => b.addEventListener('click', () => { settings.walls = b.dataset.walls; store.set('mm3d_settings', settings); applyWalls(); renderControls(); }));
 document.querySelectorAll('[data-pace]').forEach(b => b.addEventListener('click', () => { settings.pace = b.dataset.pace; store.set('mm3d_settings', settings); renderControls(); }));
 renderControls();
@@ -748,10 +765,10 @@ function arcadeCommand(cmd){
   }
   const want = (p.dir + (cmd === 'l' ? 1 : 3)) % 4;
   // just past a junction? step back to it and take the turn now
-  if (p.t < .22 && openDir(p.c, p.r, want)){
+  if (p.t < .35 && openDir(p.c, p.r, want)){
     p.t = 0; p.dir = want; p.queued = null; if (state === 'play') p.moving = true; return;
   }
-  p.queued = want; p.queueT = 3;
+  p.queued = want; p.queueT = 8;
 }
 function updateArcade(dt){
   const p = player;
@@ -770,6 +787,19 @@ function updateArcade(dt){
   }
   p.x = p.c + .5 + DIRS[p.dir].x*p.t; p.z = p.r + .5 + DIRS[p.dir].y*p.t;
   if (p.moving) p.bob += dt * 11;
+}
+function updateEdges(){
+  const p = player, show = arcade() && (state === 'play' || state === 'ready');
+  let L = false, R = false;
+  if (show){
+    const here = p.t < .35 || !p.moving;
+    const jc = here ? p.c : wrapC(p.c + DIRS[p.dir].x), jr = here ? p.r : p.r + DIRS[p.dir].y;
+    L = openDir(jc, jr, (p.dir + 1) % 4); R = openDir(jc, jr, (p.dir + 3) % 4);
+  }
+  const eL = $('edgeL'), eR = $('edgeR');
+  if (eL.hidden === L) eL.hidden = !L; if (eR.hidden === R) eR.hidden = !R;
+  eL.classList.toggle('queued', p.queued === (p.dir + 1) % 4);
+  eR.classList.toggle('queued', p.queued === (p.dir + 3) % 4);
 }
 function facingAxis(){
   if (arcade()) return [DIRS[player.dir].x, DIRS[player.dir].y];
@@ -949,7 +979,13 @@ const hex = n => '#' + n.toString(16).padStart(6, '0');
 function drawMap(time){
   if (!mapBg || $('mapWrap').hidden) return;
   const s = mapSize, u = s / W;
-  mctx.clearRect(0, 0, s, s); mctx.drawImage(mapBg, 0, 0);
+  const px = player.x*u, pz = player.z*u, a = Math.atan2(-Math.cos(player.yaw), -Math.sin(player.yaw));
+  mctx.clearRect(0, 0, s, s); mctx.save();
+  if (settings.map !== 'north'){
+    mctx.fillStyle = 'rgba(5,4,15,.6)'; mctx.fillRect(0, 0, s, s);
+    mctx.translate(s/2, s/2); mctx.rotate(-a - Math.PI/2); mctx.scale(.8, .8); mctx.translate(-px, -pz);
+  }
+  mctx.drawImage(mapBg, 0, 0);
   mctx.fillStyle = '#ffd27a';
   for (const k of alive){
     const c = k % W, r = (k - c) / W, big = powers.has(k);
@@ -957,7 +993,6 @@ function drawMap(time){
   }
   if (gem.visible){ mctx.fillStyle = '#ff4fd8'; mctx.beginPath(); mctx.arc((GEM_CELL.c + .5)*u, (GEM_CELL.r + .5)*u, u*.32, 0, 7); mctx.fill(); }
   // view cone
-  const px = player.x*u, pz = player.z*u, a = Math.atan2(-Math.cos(player.yaw), -Math.sin(player.yaw));
   const cone = mctx.createRadialGradient(px, pz, 0, px, pz, u*5);
   cone.addColorStop(0, 'rgba(255,210,122,.35)'); cone.addColorStop(1, 'rgba(255,210,122,0)');
   mctx.fillStyle = cone; mctx.beginPath(); mctx.moveTo(px, pz); mctx.arc(px, pz, u*5, a - .6, a + .6); mctx.closePath(); mctx.fill();
@@ -971,6 +1006,7 @@ function drawMap(time){
   mctx.save(); mctx.translate(px, pz); mctx.rotate(a);
   mctx.fillStyle = '#ffd27a'; mctx.shadowColor = '#ffd27a'; mctx.shadowBlur = u*.6;
   mctx.beginPath(); mctx.moveTo(u*.55, 0); mctx.lineTo(-u*.38, u*.36); mctx.lineTo(-u*.2, 0); mctx.lineTo(-u*.38, -u*.36); mctx.closePath(); mctx.fill();
+  mctx.restore();
   mctx.restore();
 }
 
@@ -989,6 +1025,17 @@ function placeCamera(dt){
     player.yaw += d * Math.min(1, dt*13);
   }
   const bob = state === 'play' && (!arcade() || player.moving) ? Math.sin(player.bob)*.028 : 0;
+  const behind = settings.view === 'behind';
+  avatar.visible = behind;
+  if (behind){
+    const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw), back = 1.9, up = lowWalls() ? 1.75 : 2.4;
+    const k = state === 'dying' ? Math.min(1, stateT/1.3) : 0;
+    avatar.position.set(player.x, .3 + bob, player.z); avatar.scale.setScalar(1 - k*.9);
+    camera.position.set(player.x - fx*back, up, player.z - fz*back);
+    camera.rotation.set(-.62, player.yaw, 0);
+    headLamp.position.set(player.x, 1.2, player.z);
+    return;
+  }
   const eye = lowWalls() ? 1.0 : .58, tilt = lowWalls() ? -.24 : 0;
   camera.position.set(player.x, eye + bob, player.z);
   camera.rotation.set(player.pitch + tilt, player.yaw, 0);
@@ -1007,7 +1054,7 @@ function frame(now){
     if (now - lastTitle < 33) return; lastTitle = now;
     const a = time*.12;
     camera.position.set(W/2 + Math.cos(a)*15, 13, H/2 + Math.sin(a)*15);
-    camera.rotation.set(0, 0, 0); camera.lookAt(W/2, 0, H/2);
+    camera.rotation.set(0, 0, 0); camera.lookAt(W/2, 0, H/2); avatar.visible = false;
     headLamp.position.set(W/2, 6, H/2);
     animateWorld(time); renderer.render(scene, camera); return;
   }
@@ -1024,7 +1071,7 @@ function frame(now){
     wallMat.emissiveIntensity = Math.floor(stateT*6) % 2 ? 1.6 : .35;
     if (stateT > 2.4){ level++; startLevel(); }
   }
-  updateDanger(dt);
+  updateDanger(dt); updateEdges();
   animateWorld(time); placeCamera(dt);
   renderer.render(scene, camera);
   drawMap(time);
