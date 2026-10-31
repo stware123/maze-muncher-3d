@@ -328,15 +328,92 @@ door.position.set(10.5, .55, 8.5); scene.add(door); applyWalls();
 // Floor
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(W + 8, H + 8), new THREE.MeshLambertMaterial({map: floorTex}));
 floor.rotation.x = -Math.PI/2; floor.position.set(W/2, 0, H/2); scene.add(floor);
-// Stars
+// Night sky: gradient dome, twinkling stars, Milky Way band, moon, shooting stars. Follows the camera so it never gets closer.
+const sky = new THREE.Group(); scene.add(sky);
+sky.add(new THREE.Mesh(new THREE.SphereGeometry(90, 32, 16), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'varying vec3 vP; void main(){ float h = clamp(vP.y, 0.0, 1.0); vec3 top = vec3(0.012, 0.012, 0.05); vec3 mid = vec3(0.05, 0.03, 0.14); vec3 hor = vec3(0.16, 0.07, 0.24); vec3 c = mix(hor, mid, smoothstep(0.0, 0.18, h)); c = mix(c, top, smoothstep(0.18, 0.75, h)); gl_FragColor = vec4(c, 1.0); }'
+})));
 {
-  const n = 600, p = new Float32Array(n*3);
-  for (let i = 0; i < n; i++){
-    const th = Math.random()*Math.PI*2, ph = Math.random()*Math.PI*.42;
-    p[i*3] = W/2 + Math.cos(th)*Math.sin(ph)*60; p[i*3+1] = Math.cos(ph)*60; p[i*3+2] = H/2 + Math.sin(th)*Math.sin(ph)*60;
+  const N = 1800, pos = new Float32Array(N*3), size = new Float32Array(N), phase = new Float32Array(N), col = new Float32Array(N*3);
+  const tints = [[1,1,1],[.75,.85,1],[1,.92,.75],[.85,.8,1],[1,.8,.8]];
+  const band = new THREE.Vector3(.35, .55, .76).normalize();
+  const a1 = new THREE.Vector3(1, 0, 0).cross(band).normalize(), a2 = band.clone().cross(a1);
+  for (let i = 0; i < N; i++){
+    let v;
+    if (i < N*.45){
+      const t = Math.random()*Math.PI*2, spread = (Math.random() - .5) * .28;
+      v = a1.clone().multiplyScalar(Math.cos(t)).add(a2.clone().multiplyScalar(Math.sin(t))).add(band.clone().multiplyScalar(spread)).normalize();
+    } else {
+      const az = Math.random()*Math.PI*2, el = Math.pow(Math.random(), 1.9) * 1.45 + .03;
+      v = new THREE.Vector3(Math.cos(az)*Math.cos(el), Math.sin(el), Math.sin(az)*Math.cos(el));
+    }
+    if (v.y < .04) v.y = .04 + Math.random()*.5;
+    v.normalize().multiplyScalar(85);
+    pos.set([v.x, v.y, v.z], i*3);
+    const r = Math.random();
+    size[i] = i < N*.45 ? 1.4 + r*1.8 : (r > .96 ? 6 + Math.random()*3 : r > .82 ? 3.6 + Math.random()*1.8 : 1.8 + Math.random()*1.8);
+    phase[i] = Math.random()*100;
+    col.set(tints[Math.random()*tints.length | 0], i*3);
   }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-  scene.add(new THREE.Points(g, new THREE.PointsMaterial({color: 0xb8c0ff, size: .25, fog: false})));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('size', new THREE.BufferAttribute(size, 1));
+  g.setAttribute('phase', new THREE.BufferAttribute(phase, 1));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const starMat = new THREE.ShaderMaterial({
+    uniforms: {uTime: {value: 0}, uScale: {value: Math.min(devicePixelRatio || 1, 2)}},
+    transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, vertexColors: true,
+    vertexShader: 'attribute float size; attribute float phase; uniform float uTime; uniform float uScale; varying vec3 vC; varying float vA; void main(){ vC = color; vA = 0.6 + 0.4*sin(uTime*(1.5 + fract(phase)*2.5) + phase); vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * uScale; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'varying vec3 vC; varying float vA; void main(){ vec2 d = gl_PointCoord - 0.5; float r = length(d); float core = smoothstep(0.5, 0.0, r); float a = core*core*vA; gl_FragColor = vec4(vC*a*1.4, a); }'
+  });
+  sky.add(new THREE.Points(g, starMat)); sky.userData.starMat = starMat;
+  const mwTex = canvasTex(128, (c, s) => { const gr = c.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2); gr.addColorStop(0, 'rgba(150,140,255,.22)'); gr.addColorStop(1, 'rgba(150,140,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, s, s); });
+  for (let i = 0; i < 26; i++){
+    const t = i/26*Math.PI*2, v = a1.clone().multiplyScalar(Math.cos(t)).add(a2.clone().multiplyScalar(Math.sin(t)));
+    if (v.y < 0) continue;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: mwTex, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending}));
+    sp.position.copy(v.multiplyScalar(86)); sp.scale.setScalar(26 + Math.random()*10); sky.add(sp);
+  }
+  const moonTex = canvasTex(256, (c, s) => {
+    const gl = c.createRadialGradient(s/2, s/2, s*.18, s/2, s/2, s/2); gl.addColorStop(0, 'rgba(220,225,255,.35)'); gl.addColorStop(1, 'rgba(220,225,255,0)');
+    c.fillStyle = gl; c.fillRect(0, 0, s, s);
+    const body = c.createRadialGradient(s*.45, s*.45, s*.02, s/2, s/2, s*.2); body.addColorStop(0, '#fbfaf0'); body.addColorStop(1, '#c9cbe0');
+    c.fillStyle = body; c.beginPath(); c.arc(s/2, s/2, s*.2, 0, 7); c.fill();
+    c.fillStyle = 'rgba(150,150,180,.35)';
+    [[.44,.46,.04],[.55,.42,.025],[.52,.56,.035],[.42,.58,.02]].forEach(([x, y, r]) => { c.beginPath(); c.arc(s*x, s*y, s*r, 0, 7); c.fill(); });
+  });
+  const moon = new THREE.Sprite(new THREE.SpriteMaterial({map: moonTex, transparent: true, depthWrite: false, fog: false}));
+  moon.position.set(-52, 17, -64); moon.scale.setScalar(20); sky.add(moon);
+}
+const shooter = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({map: canvasTex(128, (c, s) => {
+  const gr = c.createLinearGradient(0, 0, s, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.85, 'rgba(220,230,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,1)');
+  c.fillStyle = gr; c.fillRect(0, s*.46, s, s*.08);
+}), transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide}));
+shooter.visible = false; sky.add(shooter);
+let shootT = 4, shootLife = 0; const shootDir = new THREE.Vector3();
+function updateSky(time, dt){
+  sky.position.copy(camera.position);
+  sky.userData.starMat.uniforms.uTime.value = time;
+  shootT -= dt;
+  if (shootT <= 0 && !shooter.visible){
+    shootT = 7 + Math.random()*9; shootLife = .9;
+    const yaw = camera.rotation.y + (Math.random() - .5)*1.2;
+    shooter.position.set(-Math.sin(yaw)*80, 26 + Math.random()*24, -Math.cos(yaw)*80);
+    const side = Math.random() < .5 ? 1 : -1;
+    shootDir.set(Math.cos(yaw)*side, -.45, -Math.sin(yaw)*side).normalize();
+    shooter.visible = true;
+  }
+  if (shooter.visible){
+    shootLife -= dt; shooter.position.addScaledVector(shootDir, dt*55);
+    const w0 = shooter.position.clone().add(sky.position), w1 = w0.clone().add(shootDir);
+    const p0 = w0.project(camera), p1 = w1.project(camera);
+    shooter.lookAt(camera.position);
+    shooter.rotateZ(Math.atan2(p1.y - p0.y, (p1.x - p0.x) * camera.aspect));
+    shooter.scale.set(16, 3, 1); shooter.material.opacity = Math.max(0, Math.min(1, shootLife*2));
+    if (shootLife <= 0) shooter.visible = false;
+  }
 }
 function glowSprite(color, scale, opacity = .6){
   const s = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTex, color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false}));
@@ -1066,7 +1143,7 @@ function placeCamera(dt){
     headLamp.position.set(player.x, 1.2, player.z);
     return;
   }
-  const eye = lowWalls() ? 1.0 : .58, tilt = lowWalls() ? -.24 : 0;
+  const eye = lowWalls() ? 1.0 : .58, tilt = lowWalls() ? -.18 : 0;
   camera.position.set(player.x, eye + bob, player.z);
   camera.rotation.set(player.pitch + tilt, player.yaw, 0);
   if (state === 'dying'){
@@ -1086,7 +1163,7 @@ function frame(now){
     camera.position.set(W/2 + Math.cos(a)*15, 13, H/2 + Math.sin(a)*15);
     camera.rotation.set(0, 0, 0); camera.lookAt(W/2, 0, H/2); avatar.visible = false;
     headLamp.position.set(W/2, 6, H/2);
-    animateWorld(time); renderer.render(scene, camera); return;
+    animateWorld(time); updateSky(time, .033); renderer.render(scene, camera); return;
   }
   stateT += dt;
   if (state === 'ready'){ if (stateT > 2.2) setState('play'); }
@@ -1102,7 +1179,7 @@ function frame(now){
     if (stateT > 2.4){ level++; startLevel(); }
   }
   updateDanger(dt); updateEdges();
-  animateWorld(time); placeCamera(dt);
+  animateWorld(time); placeCamera(dt); updateSky(time, dt);
   renderer.render(scene, camera);
   drawMap(time);
 }
