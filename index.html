@@ -61,6 +61,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--neon);outline-o
 @keyframes pop{from{transform:translate(-50%,0) scale(.7);opacity:1}to{transform:translate(-50%,-70px) scale(1.15);opacity:0}}
 #crosshair{position:fixed;z-index:4;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(236,233,255,.45);pointer-events:none}
 
+#turnCue{position:fixed;z-index:5;left:50%;bottom:calc(22% + env(safe-area-inset-bottom,0px));transform:translateX(-50%);pointer-events:none;
+  font-family:var(--f-display);font-size:30px;color:var(--neon);text-shadow:0 0 14px var(--neon);letter-spacing:.05em}
 /* Touch controls */
 #joyBase{position:fixed;z-index:4;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:2px solid var(--line);
   background:rgba(108,244,255,.07);pointer-events:none;display:none}
@@ -72,6 +74,15 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--neon);outline-o
   font-family:var(--f-display);font-size:15px;line-height:1;box-shadow:0 0 14px rgba(108,244,255,.2)}
 #turnBtn span{display:block;font-family:var(--f-body);font-size:9px;letter-spacing:.14em;color:var(--dim);margin-top:3px}
 
+#dpad{position:fixed;z-index:6;bottom:calc(16px + env(safe-area-inset-bottom,0px));right:calc(16px + env(safe-area-inset-right,0px));
+  display:grid;grid-template-columns:repeat(3,58px);grid-template-rows:repeat(3,58px);gap:4px}
+.dp{border-radius:14px;border:2px solid var(--line);background:rgba(5,4,15,.5);color:var(--neon);font-size:22px;line-height:1;
+  box-shadow:0 0 12px rgba(108,244,255,.15);touch-action:none}
+.dp:active,.dp.hit{background:rgba(108,244,255,.3)}
+.dp.up{grid-area:1/2}.dp.lf{grid-area:2/1}.dp.rt{grid-area:2/3}.dp.dn{grid-area:3/2}
+.seg{display:inline-grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{border:0;padding:9px 12px;background:transparent;color:var(--dim);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.seg button[aria-pressed="true"]{background:var(--neon);color:#04131a}
 /* Overlay screens */
 .screen{position:fixed;inset:0;z-index:10;overflow:auto;background:radial-gradient(ellipse at 30% 20%,rgba(29,31,107,.55),rgba(5,4,15,.92) 70%);
   -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);touch-action:pan-y;
@@ -124,9 +135,16 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--neon)}
 <div class="hud" id="hudC" hidden><span id="levelLbl">LEVEL 1</span><div id="lives"></div></div>
 <div id="mapWrap" hidden><canvas id="map"></canvas><span id="mapHint">TAP</span></div>
 <div id="msg" hidden></div>
+<div id="turnCue" hidden></div>
 
 <div id="joyBase"><div id="joyKnob"></div></div>
 <div id="joyHint" hidden>MOVE<br>&amp; STEER</div>
+<div id="dpad" hidden>
+  <button class="dp up" data-d="f" aria-label="Run forward">▲</button>
+  <button class="dp lf" data-d="l" aria-label="Turn left">◀</button>
+  <button class="dp rt" data-d="r" aria-label="Turn right">▶</button>
+  <button class="dp dn" data-d="b" aria-label="Turn around">▼</button>
+</div>
 <button id="turnBtn" hidden aria-label="Turn around">180°<span>TURN</span></button>
 
 <section class="screen" id="titleScreen">
@@ -142,20 +160,8 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--neon)}
     </div>
     <div class="panel">
       <h2>Controls</h2>
-      <div class="keys" id="keysDesktop">
-        <kbd>W A S D</kbd><span>Run and sidestep</span>
-        <kbd>Mouse</kbd><span>Look around (click the game to lock the mouse)</span>
-        <kbd>← →</kbd><span>Turn without the mouse</span>
-        <kbd>Space</kbd><span>Spin round 180°</span>
-        <kbd>M</kbd><span>Bigger map</span>
-        <kbd>Esc / P</kbd><span>Pause</span>
-      </div>
-      <div class="keys" id="keysTouch" hidden>
-        <kbd>Left thumb</kbd><span>Drag anywhere on the left: up to run, sideways to steer</span>
-        <kbd>Right thumb</kbd><span>Drag to look around</span>
-        <kbd>180°</kbd><span>Spin round instantly</span>
-        <kbd>Map</kbd><span>Tap the map to make it bigger</span>
-      </div>
+      <div class="seg" role="group" aria-label="Control style"><button data-mode="arcade">Auto-run</button><button data-mode="free">Free roam</button></div>
+      <div class="keys" id="keys"></div>
       <h2>Who's hunting you</h2>
       <div class="roster">
         <div><i style="background:#ff3b4e"></i><b>Rook</b><span>Comes straight for you</span></div>
@@ -174,6 +180,7 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--neon)}
     <div class="panel">
       <div class="row"><label for="sens">Look speed</label><input type="range" id="sens" min="0.4" max="2.2" step="0.1"></div>
       <div class="row"><label for="snd">Sound</label><input type="checkbox" id="snd"></div>
+      <div class="row"><span>Controls</span><div class="seg" role="group" aria-label="Control style"><button data-mode="arcade">Auto-run</button><button data-mode="free">Free roam</button></div></div>
     </div>
     <button class="btn" id="resumeBtn">Resume</button>
     <button class="btn ghost" id="quitBtn">Quit to title</button>
@@ -235,8 +242,9 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
-const settings = Object.assign({sens:1, sound:true}, store.get('mm3d_settings', {}));
+const settings = Object.assign({sens:1, sound:true, controls:'arcade'}, store.get('mm3d_settings', {}));
 let high = store.get('mm3d_high', 0);
+const arcade = () => settings.controls === 'arcade';
 const isTouch = matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints || 0) > 0;
 
 /* ---------- Renderer & scene ---------- */
@@ -389,7 +397,7 @@ function makeGhostMesh(color){
 const ghosts = GHOSTS.map((def, id) => Object.assign({id, def, mesh: makeGhostMesh(def.color)}, {state:'house', c:10, r:7, dir:DIRS[1], t:0, x:10.5, z:7.5, fright:false}));
 
 /* ---------- Game state ---------- */
-const player = {x: START.c + .5, z: START.r + .5, yaw: Math.PI/2, pitch: 0, bob: 0, spin: 0};
+const player = {x: START.c + .5, z: START.r + .5, yaw: Math.PI/2, pitch: 0, bob: 0, spin: 0, c: START.c, r: START.r, dir: 1, t: 0, moving: false, queued: null, queueT: 0, lookOff: 0};
 let state = 'title', stateT = 0, score = 0, lives = 3, level = 1, extraGiven = false;
 let modeIdx = 0, modeT = 0, mode = 'scatter', frightT = 0, combo = 0, levelClock = 0;
 let eaten = 0, gemT = 0, gemsShown = 0, chompAlt = false;
@@ -399,7 +407,7 @@ const ghostBase = () => Math.min(4.3, 3.15 + (level-1)*.14);
 const frightDur = () => Math.max(1.5, 7 - (level-1)*.6);
 
 function resetActors(){
-  Object.assign(player, {x: START.c + .5, z: START.r + .5, yaw: Math.PI/2, pitch: 0, spin: 0});
+  Object.assign(player, {x: START.c + .5, z: START.r + .5, yaw: Math.PI/2, pitch: 0, spin: 0, c: START.c, r: START.r, dir: 1, t: 0, moving: false, queued: null, lookOff: 0});
   ghosts.forEach(g => {
     g.fright = false; g.t = 0;
     if (g.def.slot){ g.state = 'house'; g.x = g.def.slot[0] + .5; g.z = 9.5; }
@@ -423,6 +431,7 @@ function setState(s){
   state = s; stateT = 0;
   const msg = $('msg');
   if (s === 'ready'){ msg.innerHTML = 'READY!<small>LEVEL ' + level + '</small>'; msg.hidden = false; jingle(); }
+  else if (s === 'play'){ msg.hidden = true; if (arcade() && player.t === 0) player.moving = openDir(player.c, player.r, player.dir); }
   else if (s === 'cleared'){ msg.innerHTML = 'MAZE CLEAR!'; msg.hidden = false; sfxClear(); }
   else msg.hidden = true;
 }
@@ -445,9 +454,12 @@ function popup(text){
   document.body.appendChild(d); setTimeout(() => d.remove(), 1000);
 }
 function showPlayUI(on){
+  $('turnCue').hidden = true;
   ['hudL','hudC','mapWrap'].forEach(id => $(id).hidden = !on);
-  $('turnBtn').hidden = !(on && isTouch); $('joyHint').hidden = !(on && isTouch);
-  $('crosshair').hidden = !(on && !isTouch);
+  const a = arcade();
+  $('turnBtn').hidden = !(on && isTouch && !a); $('joyHint').hidden = !(on && isTouch && !a);
+  $('dpad').hidden = !(on && isTouch && a);
+  $('crosshair').hidden = !(on && !isTouch && !a);
 }
 
 /* ---------- Audio (synthesised) ---------- */
@@ -486,7 +498,10 @@ const keys = new Set();
 addEventListener('keydown', e => {
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   keys.add(e.code);
-  if (e.code === 'Space' && inGame()) quickTurn();
+  if (arcade() && !e.repeat){
+    const cmd = {ArrowUp:'f', KeyW:'f', ArrowDown:'b', KeyS:'b', Space:'b', ArrowLeft:'l', KeyA:'l', ArrowRight:'r', KeyD:'r'}[e.code];
+    if (cmd) arcadeCommand(cmd);
+  } else if (e.code === 'Space' && inGame()) quickTurn();
   if (e.code === 'KeyM') $('mapWrap').classList.toggle('big');
   if ((e.code === 'KeyP' || e.code === 'Escape') && inGame()) pause();
   else if ((e.code === 'KeyP') && state === 'paused') resume();
@@ -497,6 +512,7 @@ const inGame = () => ['ready','play','dying','cleared'].includes(state);
 function quickTurn(){ if (player.spin === 0) player.spin = Math.PI; }
 
 const joy = {id: null, ox: 0, oy: 0, x: 0, y: 0};
+const swipe = {id: null, x: 0, y: 0, done: false};
 const look = {id: null, lx: 0};
 let mouseDrag = null;
 const canvas = renderer.domElement;
@@ -504,6 +520,11 @@ const lockEl = () => document.pointerLockElement === $('touch');
 $('touch').addEventListener('pointerdown', e => {
   if (!inGame()) return;
   initAudio();
+  if (arcade()){
+    if (e.pointerType === 'mouse') mouseDrag = {x: e.clientX};
+    else if (swipe.id === null) Object.assign(swipe, {id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, done: false, glance: false});
+    return;
+  }
   if (e.pointerType === 'mouse'){
     if (!lockEl()){
       try { const p = $('touch').requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch(err){}
@@ -518,6 +539,18 @@ $('touch').addEventListener('pointerdown', e => {
   } else if (look.id === null){ look.id = e.pointerId; look.lx = e.clientX; }
 });
 addEventListener('pointermove', e => {
+  if (arcade()){
+    if (e.pointerId === swipe.id && !swipe.done){
+      const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
+      if (Math.hypot(dx, dy) > 26){
+        swipe.done = true;
+        arcadeCommand(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'r' : 'l') : (dy < 0 ? 'f' : 'b'));
+      }
+    } else if (e.pointerType === 'mouse' && mouseDrag && (e.buttons & 1)){
+      player.lookOff = Math.max(-1.3, Math.min(1.3, player.lookOff - (e.clientX - mouseDrag.x) * .006 * settings.sens)); mouseDrag.x = e.clientX;
+    }
+    return;
+  }
   if (e.pointerId === joy.id){
     let dx = e.clientX - joy.ox, dy = e.clientY - joy.oy; const R = 55, L = Math.hypot(dx, dy);
     if (L > R){ dx *= R/L; dy *= R/L; }
@@ -530,6 +563,7 @@ addEventListener('pointermove', e => {
   }
 });
 function endPointer(e){
+  if (e.pointerId === swipe.id) swipe.id = null;
   if (e.pointerId === joy.id){ joy.id = null; joy.x = joy.y = 0; $('joyBase').style.display = 'none'; }
   if (e.pointerId === look.id) look.id = null;
   if (e.pointerType === 'mouse') mouseDrag = null;
@@ -541,6 +575,10 @@ document.addEventListener('pointerlockchange', () => {
   else if (hadLock && inGame()){ hadLock = false; pause(); }
 });
 $('turnBtn').addEventListener('pointerdown', e => { e.stopPropagation(); quickTurn(); });
+document.querySelectorAll('.dp').forEach(b => b.addEventListener('pointerdown', e => {
+  e.stopPropagation(); e.preventDefault(); initAudio(); arcadeCommand(b.dataset.d);
+  b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), 120);
+}));
 $('mapWrap').addEventListener('pointerdown', e => { e.stopPropagation(); $('mapWrap').classList.toggle('big'); sizeMap(); });
 $('pauseBtn').addEventListener('pointerdown', e => e.stopPropagation());
 $('pauseBtn').addEventListener('click', () => pause());
@@ -573,7 +611,34 @@ function begin(){
 }
 $('playBtn').onclick = begin; $('againBtn').onclick = begin; $('menuBtn').onclick = toTitle;
 document.addEventListener('visibilitychange', () => { if (document.hidden && inGame()) pause(); });
-if (isTouch){ $('keysDesktop').hidden = true; $('keysTouch').hidden = false; }
+const HELP = {
+  arcadeTouch: [['Swipe ◀ ▶','Take the next left or right'],['Swipe ▲','Run forward'],['Swipe ▼','Turn round and run back'],['Arrow pad','Same moves, bottom right'],['Map','Tap it to make it bigger']],
+  arcadeDesk: [['↑ / W','Run forward'],['↓ / S','Turn round and run back'],['← → / A D','Take the next left or right'],['Mouse drag','Glance around'],['M','Bigger map'],['Esc / P','Pause']],
+  freeTouch: [['Left thumb','Drag anywhere on the left: up to run, sideways to steer'],['Right thumb','Drag to look around'],['180°','Spin round instantly'],['Map','Tap it to make it bigger']],
+  freeDesk: [['W A S D','Run and sidestep'],['Mouse','Look around (click the game to lock the mouse)'],['← →','Turn without the mouse'],['Space','Spin round 180°'],['M','Bigger map'],['Esc / P','Pause']]
+};
+function renderControls(){
+  const rows = HELP[(arcade() ? 'arcade' : 'free') + (isTouch ? 'Touch' : 'Desk')];
+  $('keys').innerHTML = rows.map(([k, v]) => `<kbd>${k}</kbd><span>${v}</span>`).join('');
+  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === settings.controls));
+}
+function setControls(mode){
+  if (mode === settings.controls) return;
+  settings.controls = mode; store.set('mm3d_settings', settings);
+  if (mode === 'arcade'){
+    // snap onto the grid, facing the nearest corridor direction
+    player.c = wrapC(Math.floor(player.x)); player.r = Math.floor(player.z); player.t = 0;
+    const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+    const ax = Math.abs(fx) > Math.abs(fz) ? [Math.sign(fx), 0] : [0, Math.sign(fz)];
+    player.dir = DIRS.findIndex(d => d.x === ax[0] && d.y === ax[1]);
+    player.x = player.c + .5; player.z = player.r + .5; player.queued = null; player.lookOff = 0;
+    player.moving = (pausedFrom === 'play') && openDir(player.c, player.r, player.dir);
+  }
+  renderControls();
+  if (state === 'paused') showPlayUI(true);
+}
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setControls(b.dataset.mode)));
+renderControls();
 $('installTip').textContent = isTouch
   ? 'Tip: add this page to your home screen for a full-screen game icon. Landscape gives the widest view.'
   : '';
@@ -625,8 +690,11 @@ function updatePlayer(dt){
   collide(player, .3);
   if (player.x < 0) player.x += W; if (player.x >= W) player.x -= W;
   player.bob += moving * dt * 11;
-  // eat
-  const k = Math.floor(player.z)*W + Math.floor(player.x);
+  eatCell(Math.floor(player.x), Math.floor(player.z));
+}
+function eatCell(c, r){
+  c = wrapC(c);
+  const k = r*W + c;
   if (alive.has(k)){
     const kind = removePellet(k); eaten++;
     if (kind === 'dot'){ addScore(10); sfxChomp(); }
@@ -634,12 +702,56 @@ function updatePlayer(dt){
     if (eaten === 70 || eaten === 150){ gem.visible = true; gemT = 9.5; gemsShown++; }
     if (alive.size === 0){ setState('cleared'); return; }
   }
-  if (gem.visible && Math.floor(player.x) === GEM_CELL.c && Math.floor(player.z) === GEM_CELL.r){
+  if (gem.visible && c === GEM_CELL.c && r === GEM_CELL.r){
     const v = GEM_VALUES[Math.min(level-1, GEM_VALUES.length-1)];
     gem.visible = false; addScore(v); sfxGem(); popup('+' + v);
   }
 }
+
+/* Auto-run: move cell to cell like the arcade game. Turns are queued and taken at the next opening. */
+const openDir = (c, r, i) => !solid(cell(c + DIRS[i].x, r + DIRS[i].y));
+const dirYaw = i => Math.atan2(-DIRS[i].x, -DIRS[i].y);
+function arcadeCommand(cmd){
+  if (state !== 'play' && state !== 'ready') return;
+  const p = player;
+  if (cmd === 'b'){
+    if (p.t > 0){ p.c = wrapC(p.c + DIRS[p.dir].x); p.r += DIRS[p.dir].y; p.t = 1 - p.t; }
+    p.dir = (p.dir + 2) % 4; p.queued = null;
+    p.moving = state === 'play' && (p.t > 0 || openDir(p.c, p.r, p.dir));
+    return;
+  }
+  if (cmd === 'f'){
+    p.queued = null;
+    if (state === 'play' && (p.t > 0 || openDir(p.c, p.r, p.dir))) p.moving = true;
+    return;
+  }
+  const want = (p.dir + (cmd === 'l' ? 1 : 3)) % 4;
+  // just past a junction? step back to it and take the turn now
+  if (p.t < .22 && openDir(p.c, p.r, want)){
+    p.t = 0; p.dir = want; p.queued = null; if (state === 'play') p.moving = true; return;
+  }
+  p.queued = want; p.queueT = 3;
+}
+function updateArcade(dt){
+  const p = player;
+  if (p.queued !== null){ p.queueT -= dt; if (p.queueT <= 0) p.queued = null; }
+  const cue = p.queued === null ? '' : (p.queued === (p.dir + 1) % 4 ? '◀ NEXT LEFT' : p.queued === (p.dir + 3) % 4 ? 'NEXT RIGHT ▶' : '');
+  const ce = $('turnCue'); if (ce.textContent !== cue){ ce.textContent = cue; ce.hidden = !cue; }
+  let rem = p.moving ? playerSpeed()*dt : 0, guard = 0;
+  while (rem > 0 && p.moving && guard++ < 4){
+    const step = Math.min(rem, 1 - p.t); p.t += step; rem -= step;
+    if (p.t >= 1 - 1e-6){
+      p.t = 0; p.c = wrapC(p.c + DIRS[p.dir].x); p.r += DIRS[p.dir].y;
+      eatCell(p.c, p.r); if (state !== 'play') break;
+      if (p.queued !== null && openDir(p.c, p.r, p.queued)){ p.dir = p.queued; p.queued = null; }
+      if (!openDir(p.c, p.r, p.dir)) p.moving = false;
+    }
+  }
+  p.x = p.c + .5 + DIRS[p.dir].x*p.t; p.z = p.r + .5 + DIRS[p.dir].y*p.t;
+  if (p.moving) p.bob += dt * 11;
+}
 function facingAxis(){
+  if (arcade()) return [DIRS[player.dir].x, DIRS[player.dir].y];
   const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
   return Math.abs(fx) > Math.abs(fz) ? [Math.sign(fx), 0] : [0, Math.sign(fz)];
 }
@@ -743,7 +855,7 @@ function updatePlay(dt){
     if (modeT >= MODE_TIMES[modeIdx]){ modeT = 0; modeIdx++; mode = modeIdx % 2 ? 'chase' : 'scatter'; ghosts.forEach(reverse); }
   }
   if (gem.visible){ gemT -= dt; if (gemT <= 0) gem.visible = false; }
-  updatePlayer(dt);
+  if (arcade()) updateArcade(dt); else updatePlayer(dt);
   if (state !== 'play') return;
   for (const g of ghosts){
     updateGhost(g, dt);
@@ -850,7 +962,12 @@ function animateWorld(time){
   ghosts.forEach(g => placeGhost(g, time));
 }
 function placeCamera(dt){
-  const bob = state === 'play' ? Math.sin(player.bob)*.028 : 0;
+  if (arcade() && state !== 'dying'){
+    if (!mouseDrag) player.lookOff *= Math.exp(-5*dt);
+    let d = dirYaw(player.dir) + player.lookOff - player.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+    player.yaw += d * Math.min(1, dt*13);
+  }
+  const bob = state === 'play' && (!arcade() || player.moving) ? Math.sin(player.bob)*.028 : 0;
   camera.position.set(player.x, .58 + bob, player.z);
   camera.rotation.set(player.pitch, player.yaw, 0);
   if (state === 'dying'){

@@ -7,7 +7,7 @@ A first-person 3D maze chase. Run the corridors yourself, eat every pellet, grab
 Works in any modern browser on PC, Mac, Android and iPhone. On a phone, add it to your home screen (Chrome: ⋮ → Install app; Safari: Share → Add to Home Screen) for a full-screen icon that also plays offline.
 
 ## Controls
-- **PC:** W A S D to run and sidestep, mouse to look (click the game to lock the mouse), ← → to turn, Space to spin 180°, M for a bigger map, Esc or P to pause.
-- **Phone / tablet:** left thumb drags to run and steer, right thumb drags to look, 180° button spins you round, tap the map to enlarge it.
+- **Auto-run (default):** you keep running on your own. ↑/W runs forward, ↓/S turns you round, ← → or A/D take the next left or right. On phones, swipe in those directions or use the arrow pad.
+- **Free roam (switch in Pause):** W A S D and mouse to look on PC; left thumb to run and steer, right thumb to look on phones.
 
 Built with [three.js](https://threejs.org) (MIT). An original fan-made game, not affiliated with any arcade game publisher.
