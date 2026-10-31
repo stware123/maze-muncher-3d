@@ -558,7 +558,7 @@ $('touch').addEventListener('pointerdown', e => {
   initAudio();
   if (arcade()){
     if (e.pointerType === 'mouse') mouseDrag = {x: e.clientX};
-    else if (e.clientX < innerWidth * .5 && stick.id === null){
+    else if (e.clientX > innerWidth * .5 && stick.id === null){
       Object.assign(stick, {id: e.pointerId, ox: e.clientX, oy: e.clientY, sector: null});
       placeStick(e.clientX, e.clientY, false);
     }
@@ -640,7 +640,7 @@ function placeStick(x, y, rest){
   b.classList.toggle('rest', rest); b.classList.remove('on'); $('joyKnob').style.transform = '';
 }
 function restStick(){
-  if (arcade() && isTouch && inGame()) placeStick(86, innerHeight - 96, true);
+  if (arcade() && isTouch && inGame()) placeStick(innerWidth - 86, innerHeight - 96, true);
   else $('joyBase').style.display = 'none';
 }
 addEventListener('resize', () => { if (stick.id === null) restStick(); });
@@ -669,12 +669,12 @@ function toTitle(){
 function begin(){
   initAudio();
   $('titleScreen').hidden = true; $('overScreen').hidden = true;
-  showPlayUI(true); sizeMap(); newGame();
+  showPlayUI(true); sizeMap(); newGame(); restStick();
 }
 $('playBtn').onclick = begin; $('againBtn').onclick = begin; $('menuBtn').onclick = toTitle;
 document.addEventListener('visibilitychange', () => { if (document.hidden && inGame()) pause(); });
 const HELP = {
-  arcadeTouch: [['‹ ›','Glow at the screen edge when a turning is coming up'],['Joystick','Left thumb. Up to run, down to turn round, left or right to take the next turning'],['Swipe','Right side of the screen does the same moves'],['Map','Tap it to make it bigger']],
+  arcadeTouch: [['‹ ›','Glow at the screen edge when a turning is coming up'],['Joystick','Right thumb. Up to run, down to turn round, left or right to take the next turning'],['Swipe','Left side of the screen does the same moves'],['Map','Tap it to make it bigger']],
   arcadeDesk: [['‹ ›','Glow at the screen edge when a turning is coming up'],['↑ / W','Run forward'],['↓ / S','Turn round and run back'],['← → / A D','Take the next left or right'],['Mouse drag','Glance around'],['M','Bigger map'],['Esc / P','Pause']],
   freeTouch: [['Left thumb','Drag anywhere on the left: up to run, sideways to steer'],['Right thumb','Drag to look around'],['180°','Spin round instantly'],['Map','Tap it to make it bigger']],
   freeDesk: [['W A S D','Run and sidestep'],['Mouse','Look around (click the game to lock the mouse)'],['← →','Turn without the mouse'],['Space','Spin round 180°'],['M','Bigger map'],['Esc / P','Pause']]
