@@ -83,6 +83,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--neon);outline-o
 .seg{display:inline-grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .seg button{border:0;padding:9px 12px;background:transparent;color:var(--dim);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
 .seg button[aria-pressed="true"]{background:var(--neon);color:#04131a}
+.seg3{grid-template-columns:1fr 1fr 1fr}
+.opts{display:grid;gap:8px}
+.optrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--dim);letter-spacing:.06em}
 /* Overlay screens */
 .screen{position:fixed;inset:0;z-index:10;overflow:auto;background:radial-gradient(ellipse at 30% 20%,rgba(29,31,107,.55),rgba(5,4,15,.92) 70%);
   -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);touch-action:pan-y;
@@ -160,7 +163,8 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--neon)}
     </div>
     <div class="panel">
       <h2>Controls</h2>
-      <div class="seg" role="group" aria-label="Control style"><button data-mode="arcade">Auto-run</button><button data-mode="free">Free roam</button></div>
+      <div class="opts"><div class="optrow"><span>Controls</span><div class="seg" role="group" aria-label="Control style"><button data-mode="arcade">Auto-run</button><button data-mode="free">Free roam</button></div></div>
+      <div class="optrow"><span>Speed</span><div class="seg seg3" role="group" aria-label="Game speed"><button data-pace="slow">Relaxed</button><button data-pace="normal">Normal</button><button data-pace="fast">Arcade</button></div></div></div>
       <div class="keys" id="keys"></div>
       <h2>Who's hunting you</h2>
       <div class="roster">
@@ -180,6 +184,7 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--neon)}
     <div class="panel">
       <div class="row"><label for="sens">Look speed</label><input type="range" id="sens" min="0.4" max="2.2" step="0.1"></div>
       <div class="row"><label for="snd">Sound</label><input type="checkbox" id="snd"></div>
+      <div class="row"><span>Speed</span><div class="seg seg3" role="group" aria-label="Game speed"><button data-pace="slow">Relaxed</button><button data-pace="normal">Normal</button><button data-pace="fast">Arcade</button></div></div>
       <div class="row"><span>Controls</span><div class="seg" role="group" aria-label="Control style"><button data-mode="arcade">Auto-run</button><button data-mode="free">Free roam</button></div></div>
     </div>
     <button class="btn" id="resumeBtn">Resume</button>
@@ -242,7 +247,7 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
-const settings = Object.assign({sens:1, sound:true, controls:'arcade'}, store.get('mm3d_settings', {}));
+const settings = Object.assign({sens:1, sound:true, controls:'arcade', pace:'slow'}, store.get('mm3d_settings', {}));
 let high = store.get('mm3d_high', 0);
 const arcade = () => settings.controls === 'arcade';
 const isTouch = matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints || 0) > 0;
@@ -402,8 +407,10 @@ let state = 'title', stateT = 0, score = 0, lives = 3, level = 1, extraGiven = f
 let modeIdx = 0, modeT = 0, mode = 'scatter', frightT = 0, combo = 0, levelClock = 0;
 let eaten = 0, gemT = 0, gemsShown = 0, chompAlt = false;
 const MODE_TIMES = [7, 20, 7, 20, 5, 20, 5, Infinity];
-const playerSpeed = () => Math.min(4.3, 3.7 + (level-1)*.08);
-const ghostBase = () => Math.min(4.3, 3.15 + (level-1)*.14);
+const PACE = {slow: .62, normal: .8, fast: 1};
+const pace = () => PACE[settings.pace] || .62;
+const playerSpeed = () => Math.min(4.3, 3.7 + (level-1)*.08) * pace();
+const ghostBase = () => Math.min(4.3, 3.15 + (level-1)*.14) * pace();
 const frightDur = () => Math.max(1.5, 7 - (level-1)*.6);
 
 function resetActors(){
@@ -620,7 +627,8 @@ const HELP = {
 function renderControls(){
   const rows = HELP[(arcade() ? 'arcade' : 'free') + (isTouch ? 'Touch' : 'Desk')];
   $('keys').innerHTML = rows.map(([k, v]) => `<kbd>${k}</kbd><span>${v}</span>`).join('');
-  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === settings.controls));
+  document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === settings.controls));
+  document.querySelectorAll('[data-pace]').forEach(b => b.setAttribute('aria-pressed', b.dataset.pace === settings.pace));
 }
 function setControls(mode){
   if (mode === settings.controls) return;
@@ -637,7 +645,8 @@ function setControls(mode){
   renderControls();
   if (state === 'paused') showPlayUI(true);
 }
-document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setControls(b.dataset.mode)));
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setControls(b.dataset.mode)));
+document.querySelectorAll('[data-pace]').forEach(b => b.addEventListener('click', () => { settings.pace = b.dataset.pace; store.set('mm3d_settings', settings); renderControls(); }));
 renderControls();
 $('installTip').textContent = isTouch
   ? 'Tip: add this page to your home screen for a full-screen game icon. Landscape gives the widest view.'
@@ -787,7 +796,7 @@ function pickDir(g){
   g.dir = best;
 }
 function ghostSpeed(g){
-  if (g.state === 'eaten') return 9;
+  if (g.state === 'eaten') return 9 * pace();
   let s = ghostBase();
   if (g.fright) s *= .55;
   if (g.r === 9 && (g.c <= 4 || g.c >= 16)) s *= .5;
